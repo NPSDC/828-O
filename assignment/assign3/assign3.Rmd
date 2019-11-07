@@ -1,0 +1,9 @@
+---
+title: "Assign3"
+output: html_document
+---
+
+```{r}
+df = read.delim(file = 'doi_10.5061_dryad.b4vg0__v2/chilean_NTIneg.txt')
+```
+
