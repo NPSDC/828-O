@@ -31,7 +31,7 @@ for i,j in enumerate(sc.labels_):
 for (i,j) in G.edges:
     q,r = sc.labels_[i], sc.labels_[j]
     theta[q,r] += 1
-    
+
 tau += eps
 tau = tau / tau.sum(axis=1, keepdims=1)
 alpha = tau.sum(0)/ num_nodes
@@ -41,6 +41,12 @@ from tqdm import tqdm_notebook as tqdm
 import sys
 num_steps = int(sys.argv[1])
 
+cov_mat = np.ones((num_nodes,num_nodes))
+np.fill_diagonal(cov_mat,0)
+
+adj_mat_complement = 1 - adj_mat
+np.fill_diagonal(adj_mat_complement,0)
+
 
 import time
 L_old = 0
@@ -48,6 +54,8 @@ L_vec = []
 for step in range(num_steps):
     start = time.time()
     # print('step ',step)
+    print(theta)
+    print(tau[0])
     tau_new_log = np.zeros((num_nodes, num_classes))
     for i in range(num_nodes):
         for q in range(num_classes):
@@ -71,27 +79,36 @@ for step in range(num_steps):
                     tau_new_log[i,q] += np.dot(tau[j,],b_mat)
             tau_new_log[i,q] += np.log(alpha[q])
 
+    print(tau_new_log[0])
     tau_new = np.exp(tau_new_log)
     tau = tau_new.copy()
+    print(tau[0])
+    tau += eps
     tau = tau / tau.sum(axis=1, keepdims=1)
-
+    print(tau[0])
+    break
     # M step
     # Calculate alpha
     alpha = tau.sum(axis = 0) / num_nodes
     # Calculate theta
-    for q in range(num_classes):
-        for r in range(num_classes):
-            num = 0
-            denom = 0
-            for i in range(num_nodes):
-                for j in range(num_nodes):
-                    if ( i != j):
-                        num += adj_mat[i,j] * tau[i,q] * tau[j,r]
-                        denom +=  tau[i,q] * tau[j,r]
-            theta[q,r] = num / denom
-        theta[q,] = theta[q,] / theta[q,].sum()
+    num = np.dot(np.dot(tau.T, adj_mat), tau)
+    denom = np.dot(np.dot(tau.T, cov_mat), tau)
+    if (denom == 0).any():
+        print(tau)
+        print(denom)
+    theta =  num / denom
+    #for q in range(num_classes):
+    #    for r in range(num_classes):
+    #        num = 0
+    #        denom = 0
+    #        for i in range(num_nodes):
+    #            for j in range(num_nodes):
+    #                if ( i != j):
+    #                    num += adj_mat[i,j] * tau[i,q] * tau[j,r]
+    #                    denom +=  tau[i,q] * tau[j,r]
+    #        theta[q,r] = num / denom
 
-    L = np.dot(tau.sum(axis = 0), np.log(alpha)) 
+    L = np.dot(tau.sum(axis = 0), np.log(alpha))
     for i in range(num_nodes):
         for j in range(num_nodes):
             if( i != j ):
