@@ -7,6 +7,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(Debug)]
+<<<<<<< HEAD
 pub struct AlevinMetaData {
     pub alevin_prefix: PathBuf,
     pub quant_file: PathBuf,
@@ -31,11 +32,27 @@ impl AlevinMetaData {
                 dir.to_str().unwrap()
             );
         } else if !dir.as_path().is_dir() {
+=======
+pub struct ConsensusFileList {
+    pub cons_nwk_file: PathBuf,
+    pub cluster_bp_splits_file: PathBuf,
+    pub merged_groups_file: PathBuf,
+    //pub groups_length: PathBuf,
+}
+impl ConsensusFileList {
+    pub fn new(dname: String) -> ConsensusFileList {
+        let dir = PathBuf::from(dname);
+        if !dir.as_path().exists() {
+            panic!("The directory {} did not exist", dir.to_str().unwrap());
+        }
+        if !dir.as_path().is_dir() {
+>>>>>>> 6b7281c497962db5f5f4cec3671a433094082817
             panic!(
                 "The path {} did not point to a valid directory",
                 dir.to_str().unwrap()
             );
         }
+<<<<<<< HEAD
         AlevinMetaData {
             alevin_prefix: dir.clone(),
             quant_file: dir.as_path().join("quants_mat.gz"),
@@ -72,6 +89,15 @@ impl AlevinMetaData {
         self.num_of_features = self.feature_vector.len();
         self.num_of_cells = self.cell_barcode_vector.len();
         //self.feature_vector = buf_reader_feature_file.lines().iter().map(|n| n.parse::<String>().unwrap()).collect();
+=======
+        
+        ConsensusFileList {
+            cluster_bp_splits_file: dir.as_path().join("cluster_bipart_splits.txt"),
+            cons_nwk_file: dir.as_path().join("cluster_nwk.txt"),
+            merged_groups_file: dir.as_path().join("merged_groups_length.txt"),
+      //      groups_length: dir.as_path().join("groups_length.txt")
+        }
+>>>>>>> 6b7281c497962db5f5f4cec3671a433094082817
     }
 }
 
@@ -87,8 +113,14 @@ pub struct FileList {
     pub cmd_file: PathBuf,
     pub collapsed_log_file: PathBuf,
     pub group_file: PathBuf,
+    pub collapse_order_file: PathBuf,
     pub delta_file: PathBuf,
     pub cluster_file: PathBuf,
+    pub gene_cluster_file: PathBuf,
+    pub group_bp_splits_file: PathBuf,
+    pub cluster_bp_splits_file: PathBuf,
+    pub group_nwk_file: PathBuf,
+    pub mgroup_nwk_file: PathBuf,
 }
 
 // construct the files
@@ -132,7 +164,15 @@ impl FileList {
             cluster_file: dir.as_path().join("clusters.txt"),
             collapsed_log_file: dir.as_path().join("collapsed.log"),
             group_file: dir.as_path().join("groups.txt"),
+            //group_order_file: dir.as_path().join("order.txt"),
+            collapse_order_file: dir.as_path().join("collapse_order.json"),
             delta_file: dir.as_path().join("delta.log"),
+            gene_cluster_file: dir.as_path().join("gene_cluster.log"),
+            group_bp_splits_file: dir.as_path().join("group_bipart_splits.txt"),
+            cluster_bp_splits_file: dir.as_path().join("cluster_bipart_splits.txt"),
+            group_nwk_file: dir.as_path().join("group_nwk.txt"),
+            mgroup_nwk_file: dir.as_path().join("mgroup_nwk.txt"),
+            //cluster_nwk_file: dir.as_path().join("cluster_nwk.txt"),
         }
     }
 }
@@ -217,7 +257,7 @@ impl EqList {
 
     pub fn new() -> EqList {
         EqList {
-            offsets: vec![0 as usize],
+            offsets: vec![0_usize],
             labels: Vec::<u32>::new(),
             weights: Vec::<f32>::new(),
             counts: Vec::<u32>::new(),

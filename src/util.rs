@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use std::convert::TryInto;
 use std::f64;
 use std::fs::*;
@@ -30,11 +30,17 @@ use refinery::Partition;
 use serde::Deserialize;
 //use rand::thread_rng;
 //use rgsl::statistics::correlation;
+<<<<<<< HEAD
 
 use crate::salmon_types::{
     AlevinMetaData, BFHEqClassExperiment, EdgeInfo, EqClassExperiment, FileList, MetaInfo,
     ShortEdgeInfo, TxpRecord,
 };
+=======
+use crate::binary_tree::{TreeNode, sort_group_id};
+use crate::salmon_types::{EdgeInfo, EqClassExperiment, FileList, MetaInfo, TxpRecord};
+use std::iter::FromIterator;
+>>>>>>> 6b7281c497962db5f5f4cec3671a433094082817
 
 // General functions to r/w files
 // files to be handled
@@ -43,6 +49,75 @@ use crate::salmon_types::{
 // eq_classes.txt
 // bootstraps.gz
 // ambig_info.tsv
+
+// pub fn bipart_writer(
+//     g_bp_file: &mut File,
+//     group_bipart: &HashMap<String, Vec<String>>
+// ) ->  Result<bool, io::Error> {
+//     //let l = group_bipart.len();
+//     //let mut i = 0;
+//     for (group_id, bpart_vec) in group_bipart {
+//         writeln!(g_bp_file, "{}\t{}", group_id, bpart_vec.len())?;
+//         for bpart in bpart_vec {
+//             writeln!(g_bp_file, "{}", bpart)?;
+//         }
+//     }
+//     Ok(true)
+// }
+fn conv_names(g:&String, tnames:&[String]) -> String {
+    let s:Vec<String> = g.clone().split("_").map(|x| tnames[x.parse::<usize>().unwrap()].clone()).collect();
+    return s.join(",");
+}
+
+pub trait mapTrait {
+ fn bipart_writer(&self, file:&mut File, tnames:&[String]) -> Result<bool, io::Error>;
+}
+
+impl mapTrait for HashMap<String, HashMap<String, u32>> {
+    fn bipart_writer(&self, g_bp_file:&mut File, tnames:&[String]) -> Result<bool, io::Error> {
+        //let l = group_bipart.len();
+        //let mut i = 0;
+        for (group_id, bpart_hash) in self {
+            writeln!(g_bp_file, "gr\t{}\t{}", conv_names(&group_id, &tnames), bpart_hash.len())?;
+            let mut v = Vec::from_iter(bpart_hash);
+            v.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+            for (bpart,count) in v {
+                writeln!(g_bp_file, "{}\t{}", conv_names(&bpart, &tnames), count)?;
+            }
+        }
+        Ok(true)
+    }
+}
+impl mapTrait for HashMap<String, BTreeMap<String, u32>>  {
+    fn bipart_writer(&self, g_bp_file:&mut File, tnames:&[String]) -> Result<bool, io::Error> {
+        //let l = group_bipart.len();
+        //let mut i = 0;
+        for (group_id, bpart_hash) in self {
+            writeln!(g_bp_file, "gr\t{}\t{}", conv_names(&group_id, &tnames), bpart_hash.len())?;
+            let mut v = Vec::from_iter(bpart_hash);
+            v.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+            for (bpart,count) in v {
+                writeln!(g_bp_file, "{}\t{}", conv_names(&bpart, &tnames), count)?;
+            }
+        }
+        Ok(true)
+    }
+}
+// pub fn bipart_writer<T:mapTrait>(
+//     g_bp_file: &mut File,
+//     group_bipart: &T
+//     //group_bipart: &BTreeMap
+// ) ->  Result<bool, io::Error> {
+//     //let l = group_bipart.len();
+//     //let mut i = 0;
+//     for (group_id, bpart_hash) in group_bipart {
+//         writeln!(g_bp_file, "gr\t{}\t{}", group_id, bpart_hash.len())?;
+//         for (bpart,count) in bpart_hash {
+//             writeln!(g_bp_file, "{}\t{}", bpart, count)?;
+//         }
+//     }
+//     Ok(true)
+// }
 
 pub fn group_writer(
     gfile: &mut File,
@@ -56,6 +131,82 @@ pub fn group_writer(
         writeln!(gfile, "{},{}", group_id.to_string(), strings.join(","))?;
     }
     Ok(true)
+}
+
+pub fn group_writer2(
+    gfile: &mut File,
+    groups: &HashMap<String, Vec<String>>,
+) -> Result<bool, io::Error> {
+    //let mut buffer = File::create("groups.txt")?;
+    //let mut buffer = File::create("foo.txt").unwrap();
+    //let mut file = GzEncoder::new(file_handle, Compression::default());
+    for (group_id, group) in groups {
+        writeln!(gfile, "{},{}", group_id.to_string(), group.join(","))?;
+    }
+    Ok(true)
+}
+
+pub fn collapse_order_writer(
+    co_file: &mut File,
+    groups: &HashMap<usize, Vec<usize>>,
+    c_order: &[TreeNode]
+) -> Result<bool, io::Error> {
+    //let mut buffer = File::create("groups.txt")?;
+    //let mut buffer = File::create("foo.txt").unwrap();
+    //let mut file = GzEncoder::new(file_handle, Compression::default());
+    let mut co_updated : HashMap<String,TreeNode> = HashMap::new();
+    
+    // co_updated.insert(0, c_order[0].clone());
+    // co_updated.insert(1, c_order[1].clone());
+    // co_updated.insert(2, c_order[10].clone());
+    for (group_id, _) in groups {
+        co_updated.insert(sort_group_id(&c_order[*group_id].id), c_order[*group_id].clone());
+    }
+    //println!("{:?}", co_updated);
+    let err_write = format!("Could not create/write collapsed_order.json in {:?}", co_file);
+    
+    //let serialized = serde_pickle::to_writer(co_file, &co_updated, true);
+    ::serde_json::to_writer(co_file, &co_updated)
+            .expect(&err_write);
+
+    Ok(true)
+}
+
+pub fn gene_writer(
+    gfile: &mut File,
+    components: &[Vec<pg::graph::NodeIndex>],
+    genenames: &[String],
+) -> Result<bool, io::Error> {
+    for (_i, comp) in components.iter().enumerate() {
+        if comp.len() > 1 {
+            let strings: Vec<String> = comp
+                .iter()
+                .map(|n| genenames[n.index()].to_string())
+                .collect();
+            writeln!(gfile, "{}", strings.join(","))?;
+        }
+    }
+    Ok(true)
+}
+
+#[allow(dead_code)]
+pub fn get_merged_mat(
+    gibbs_mat: &Array2<f64>,
+    original_id_to_old_id_map: &HashMap<u32, Vec<u32>>,
+) -> Array2<f64> {
+    let shape = gibbs_mat.shape();
+    let new_width = shape[1];
+    let new_hight = original_id_to_old_id_map.capacity();
+
+    let mut merged_gibbs_mat = Array2::<f64>::zeros((new_hight, new_width));
+
+    for (original_id, txp_id_vec) in original_id_to_old_id_map.iter() {
+        let mut s = merged_gibbs_mat.slice_mut(s![*original_id as usize, ..]);
+        for i in txp_id_vec.iter() {
+            s += &gibbs_mat.index_axis(Axis(0), *i as usize).to_owned();
+        }
+    }
+    merged_gibbs_mat
 }
 
 pub fn write_quants_from_components(
@@ -343,6 +494,34 @@ pub fn get_ambig(filename: &std::path::Path) -> Vec<u32> {
 }
 
 #[allow(dead_code)]
+pub fn get_t2g(
+    filename: &std::path::Path,
+    genemap: &mut HashMap<String, u32>,
+    t2gmap: &mut HashMap<String, String>,
+) -> Vec<String> {
+    let file = File::open(filename).expect("File could not be opened");
+    let buf_reader = BufReader::new(file);
+    let mut genenames = Vec::<String>::new();
+
+    let mut gene_id = 0;
+    for (_i, l) in buf_reader.lines().enumerate() {
+        let s = l.expect("Can't read line");
+        let mut iter = s.split_ascii_whitespace();
+        let transcript: String = iter.next().expect("expect transcript name").to_string();
+        let gene: String = iter.next().expect("expect gene name").to_string();
+        assert!(!transcript.is_empty(), "transcript name is empty");
+        assert!(!gene.is_empty(), "gene name is empty");
+        t2gmap.insert(transcript.clone(), gene.clone());
+        if !genemap.contains_key(&gene) {
+            genemap.insert(gene.clone(), gene_id);
+            gene_id += 1;
+            genenames.push(gene.clone());
+        }
+    }
+    genenames
+}
+
+#[allow(dead_code)]
 pub fn group_reader(filename: &std::path::Path) -> Vec<Vec<usize>> {
     let file = File::open(filename).unwrap();
     let buf_reader = BufReader::new(file);
@@ -460,8 +639,8 @@ pub fn get_threhold(
 
     let mut starting_num_samples = starting_num_samples as usize;
 
-    let mut old_threshold = 0.0 as f64;
-    let mut new_threshold = 0.0 as f64;
+    let mut old_threshold = 0.0_f64;
+    let mut new_threshold = 0.0_f64;
 
     // let mut rng = thread_rng();
     let mut rng = Pcg64::seed_from_u64(seed);
@@ -471,8 +650,8 @@ pub fn get_threhold(
         let mut roll_die = die_range.sample_iter(&mut rng);
 
         let mut sampled_infrv = vec![OrderedFloat(0.0); starting_num_samples as usize];
-        let mut dice_iter = 0 as usize;
-        let mut mean_sum = 0.0f64;
+        let mut dice_iter = 0_usize;
+        let mut mean_sum = 0.0_f64;
 
         while dice_iter < starting_num_samples as usize {
             let i1 = roll_die.next().unwrap();
@@ -579,7 +758,61 @@ pub fn get_variance_fold_change(
    varsum / (infa + infb + 1.)
 }
 */
+pub fn order_group_writer(go_file: &mut File,
+    group_order: & [String],
+    groups: &HashMap<usize, Vec<usize>>)     
+    -> Result<bool, io::Error>{
+    //let go_iter = group_order.iter();
+    for (group_id, group) in groups {        
+        writeln!(go_file, "{}", group_order[*group_id])?;
+    }
+    Ok(true)
+}
 
+pub fn co_id_writer(go_file: &mut File,
+    groups: &HashMap<usize, Vec<usize>>,
+    co_order: &[TreeNode])     
+    -> Result<bool, io::Error>{
+    //let go_iter = group_order.iter();
+    for (group_id, _) in groups {        
+        writeln!(go_file, "{}", co_order[*group_id].id)?;
+    }
+    Ok(true)
+}
+
+
+fn order_group(source: usize, target:usize, group_order: &mut [String]) {
+    
+    // if group_order[target].ends_with("p"){ //p is to say that this node has been target prior
+    //     println!("{}_{}",source,target);
+        
+    //     panic!("Transcript already grouped");
+    // }
+    // if group_order[source].ends_with("p"){
+    //     while true{
+    //         let l = group_order[source].len();
+    //         let t = group_order[source][0..l-1].parse::<usize>().unwrap();
+    //         if t == source{
+    //             panic!("Source not linked");
+    //         }
+    //         source = t;
+    //         if ! group_order[source].ends_with("p"){
+    //             break;
+    //         }
+            
+    //     }
+    // }
+    
+    let n_target = group_order[target].rsplit("_").collect::<Vec<_>>().len();
+    group_order[source] = 
+        if n_target > 1 {
+            format!("{}gr{}", group_order[target], group_order[source])
+        }
+        else{
+            format!("{}_{}", group_order[source], group_order[target])
+        };
+    //group_order[target] = format!("{}{}", source, "p");
+}
 #[allow(dead_code, clippy::too_many_arguments, clippy::cognitive_complexity)]
 pub fn eq_experiment_to_graph(
     exp: &EqClassExperiment,
@@ -591,6 +824,11 @@ pub fn eq_experiment_to_graph(
     min_spread: f64,
     delta_file: &mut File,
     unionfind_struct: &mut UnionFind<usize>,
+    genevec: &[u32],
+    original_id_to_old_id_map: &HashMap<u32, Vec<u32>>,
+    asemode: bool,
+    group_order: &mut [String],
+    collapse_order: &mut [TreeNode]
 ) -> pg::Graph<usize, EdgeInfo, petgraph::Undirected> {
     let start = Instant::now();
 
@@ -675,26 +913,39 @@ pub fn eq_experiment_to_graph(
 
         let _wsrounded: Vec<i32> = ws.iter().map(|&w| (w * 1000f32).round() as i32).collect();
         let mut pair_vec = Vec::with_capacity(ns.len());
+        
         for j in 0..ns.len() {
             pair_vec.push((ns[j], OrderedFloat(ws[j])));
             valid_transcripts[ns[j] as usize] = true;
         }
+        
         pair_vec.sort_by_key(|k| k.1);
-
-        //let mut partition_sets = Vec::new();
-
-        let mut j = 0 as usize;
+        
+        let mut j = 0_usize;
         let mut tmp_vec = Vec::with_capacity(ns.len());
 
         while j < pair_vec.len() - 1 {
+            
             let mut diff = pair_vec[j + 1].1.to_f64().unwrap() - pair_vec[j].1.to_f64().unwrap();
             tmp_vec.clear();
             tmp_vec.push(pair_vec[j].0 as usize);
+            // if asemode is on then check for that
+
             while diff < tolerance {
+                if asemode {
+                    // check if j and (j + 1) th transcript belong to the same vector or not        
+                    let gene_a = genevec[pair_vec[j].0 as usize];
+                    let gene_b = genevec[pair_vec[j + 1].0 as usize];
+                    if gene_a != gene_b {
+                        break;
+                    }
+                }
                 tmp_vec.push(pair_vec[j + 1].0 as usize);
                 valid_transcripts[pair_vec[j].0 as usize] = true;
                 valid_transcripts[pair_vec[j + 1].0 as usize] = true;
+
                 j += 1;
+
                 if j < pair_vec.len() - 1 {
                     diff = pair_vec[j + 1].1.to_f64().unwrap() - pair_vec[j].1.to_f64().unwrap();
                 } else {
@@ -713,23 +964,49 @@ pub fn eq_experiment_to_graph(
             //partition_sets.push(vec![pair_vec[j].0 as usize]);
         }
 
-        //let mut tmp_vec = Vec::with_capacity(ns.len());
-        //let mut last_idx = 0 as usize;
-        //let mut ce = pair_vec[last_idx];
-        //loop {
-        //   tmp_vec.clear();
-        //   tmp_vec.extend(pair_vec.iter().skip(last_idx).take_while(|x| (x.1.to_f64().unwrap() - ce.1.to_f64().unwrap()) < 1e-3).map(|x| x.0 as usize));
-        //   part.refine(&tmp_vec[..]);
-        //   last_idx += tmp_vec.len();
-        //   if last_idx >= pair_vec.len() { break; }
-        //   ce = pair_vec[last_idx];
-        //}
-        //println!("{:?}",partition_sets);
     }
 
+    // a blanket merge in asemode
+
+    if asemode {
+        let mut allelic_collapses = 0;
+        for (_original_id, txp_id_vec) in original_id_to_old_id_map.iter() {
+            if txp_id_vec.len() > 1 {
+                let mut tlist = txp_id_vec.clone();
+                tlist.sort_unstable();
+                let source = tlist[0];
+                
+                for t in tlist.iter().skip(1) {
+                    let to_add = gibbs_mat.index_axis(Axis(0), *t as usize).to_owned();
+                    let mut s = gibbs_mat.slice_mut(s![source as usize, ..]);
+                    s += &to_add;                    
+                    let mut act_target = unionfind_struct.find(*t as usize);
+                    let mut par_source = unionfind_struct.find(source as usize); // parent of current source before union
+                    let merge = unionfind_struct.union(source as usize, *t as usize);
+                    if merge{
+                        let act_source = unionfind_struct.find(source as usize) as usize;
+                        
+                        if act_source==act_target{
+                            act_target = source as usize;
+                        }
+                        order_group(source as usize, *t as usize, group_order);
+                        //println!("{}",collapse_order[*t as usize].id);
+                        collapse_order[act_source as usize] = TreeNode::create_group(collapse_order[act_source as usize].clone(),
+                        collapse_order[act_target as usize].clone());
+                    }
+                    allelic_collapses += 1;
+                }
+            }
+        }
+        println!("Number of alleleic collapses {}", allelic_collapses);
+    }
+
+    
     let part_vec = part.iter().collect::<Vec<_>>();
     let mut golden_collapses = 0;
-    for (_, p) in part_vec.iter().enumerate() {
+    let mut t_golden_collapses = 0;
+    let mut t_prev=vec!(0);
+    'outer: for (_, p) in part_vec.iter().enumerate() {
         if p.len() > 1 {
             //println!("{:?}", p);
             if valid_transcripts[p[0]] {
@@ -737,13 +1014,28 @@ pub fn eq_experiment_to_graph(
                     println!("{},{}", p.len(), p[0]);
                 }
                 let mut tlist = p.to_vec();
-                tlist.sort();
+               
+                tlist.sort_unstable();
                 let source = tlist[0];
-                for t in tlist.iter().skip(1) {
+                
+            'inner: for t in tlist.iter().skip(1) {
                     let to_add = gibbs_mat.index_axis(Axis(0), *t as usize).to_owned();
                     let mut s = gibbs_mat.slice_mut(s![source as usize, ..]);
                     s += &to_add;
-                    unionfind_struct.union(source as usize, *t as usize);
+                    let mut act_target = unionfind_struct.find(*t as usize); // parent of current target node
+                    let mut par_source = unionfind_struct.find(source as usize); // parent of current source before union
+                    let merge = unionfind_struct.union(source as usize, *t as usize);
+                    
+                    if merge{
+                        t_golden_collapses +=1 ;
+                        let act_source = unionfind_struct.find(source as usize);
+                        if act_source == act_target{
+                            act_target = par_source;
+                        }
+                        collapse_order[act_source as usize] = TreeNode::create_group(collapse_order[act_source as usize].clone(),
+                        collapse_order[act_target as usize].clone());
+                    }
+                    
                     golden_collapses += 1;
                 }
             } else if p.len() > 10 {
@@ -752,8 +1044,9 @@ pub fn eq_experiment_to_graph(
         }
     }
     println!("Number of golden collapses {}", golden_collapses);
+    println!("Number of true golden collapses {}", t_golden_collapses);
     println!("The refinery code ran for {:?}", part_start.elapsed());
-
+    
     let mut og = pg::Graph::<usize, EdgeInfo, petgraph::Undirected>::new_undirected();
     for (i, _n) in exp.targets.iter().enumerate() {
         let idx = og.add_node(i);
@@ -831,12 +1124,22 @@ pub fn eq_experiment_to_graph(
         for a in 0..retained.len() {
             let mut na = retained[a] as usize;
             let na_root = unionfind_struct.find(na);
+            
             if na_root != na {
                 na = na_root;
             }
 
             for nb in retained.iter().skip(a + 1) {
                 let mut nbd = *nb as usize;
+
+                if asemode {
+                    let gene_a = genevec[na];
+                    let gene_b = genevec[nbd];
+                    if gene_a != gene_b {
+                        continue;
+                    }
+                }
+
                 let nb_root = unionfind_struct.find(nbd);
                 if nb_root != nbd {
                     nbd = nb_root;
@@ -933,10 +1236,14 @@ fn intersect<T: std::cmp::PartialOrd + std::cmp::Ord + Copy>(a: &[T], b: &[T]) -
         if *(va.unwrap()) < *(vb.unwrap()) {
             va = ia.next();
         } else {
-            let not_less_or_equal = match (*vb.unwrap()).partial_cmp(&*(va.unwrap())) {
-                None | Some(Ordering::Equal) | Some(Ordering::Greater) => true,
-                _ => false,
-            };
+            // let not_less_or_equal = match (*vb.unwrap()).partial_cmp(&*(va.unwrap())) {
+            //     None | Some(Ordering::Equal) | Some(Ordering::Greater) => true,
+            //     _ => false,
+            // };
+            let not_less_or_equal = matches!(
+                (*vb.unwrap()).partial_cmp(&*(va.unwrap())),
+                None | Some(Ordering::Equal) | Some(Ordering::Greater)
+            );
             if not_less_or_equal {
                 out.push(*(va.unwrap()));
                 va = ia.next();
@@ -961,10 +1268,14 @@ fn union<T: std::cmp::PartialOrd + Copy>(a: &[T], b: &[T]) -> std::vec::Vec<T> {
                 out.push(*(va.unwrap()));
                 va = ia.next();
             } else {
-                let not_less_or_equal = match (*vb.unwrap()).partial_cmp(&*(va.unwrap())) {
-                    None | Some(Ordering::Greater) => true,
-                    _ => false,
-                };
+                let not_less_or_equal = matches!(
+                    (*vb.unwrap()).partial_cmp(&*(va.unwrap())),
+                    None | Some(Ordering::Greater)
+                );
+                // let not_less_or_equal = match (*vb.unwrap()).partial_cmp(&*(va.unwrap())) {
+                //     None | Some(Ordering::Greater) => true,
+                //     _ => false,
+                // };
                 if not_less_or_equal {
                     out.push(*(va.unwrap()));
                     va = ia.next();
@@ -1023,6 +1334,8 @@ pub fn work_on_component(
     thr: f64,
     infrv_quant: f64,
     cfile: &mut File,
+    group_order: &mut [String],
+    collapse_order: &mut [TreeNode]
 ) {
     // make a set of edges to be visited
     let mut infrv_array = infrv(&gibbs_mat, Axis(1));
@@ -1123,8 +1436,20 @@ pub fn work_on_component(
                 // iii. Each neighbor of u and v
                 // iv. heap
                 // v. unionfind_array
-                unionfind_struct.union(source, target);
-
+                let mut act_target = unionfind_struct.find(target as usize);
+                let mut par_source = unionfind_struct.find(source as usize); // parent of current source before union
+                let merge = unionfind_struct.union(source as usize, target);
+                if merge{
+                    let act_source = unionfind_struct.find(source as usize) as usize;
+                    if act_source==act_target{
+                        act_target = par_source;
+                    }
+                    //order_group(source as usize, *t as usize, group_order);
+                    //println!("{}",collapse_order[*t as usize].id);
+                    collapse_order[act_source as usize] = TreeNode::create_group(collapse_order[act_source as usize].clone(),
+                    collapse_order[act_target as usize].clone());
+                }
+                
                 let to_add = gibbs_mat.index_axis(Axis(0), target).to_owned();
                 let mut s = gibbs_mat.slice_mut(s![source, ..]);
                 s += &to_add;
@@ -1141,8 +1466,8 @@ pub fn work_on_component(
                     .map(|n| n.clone().index())
                     .collect();
 
-                source_adj.sort();
-                target_adj.sort();
+                source_adj.sort_unstable();
+                target_adj.sort_unstable();
 
                 source_adj.dedup();
                 target_adj.dedup();
@@ -1214,7 +1539,7 @@ pub fn work_on_component(
                     // let delta = get_variance_fold_change(&gibbs_mat, &infrv_array, source, *x);
                     // let delta = get_infrv_fold_change(&gibbs_mat, &infrv_array, source, *x);
 
-                    let new_state = -1 as i32;
+                    let new_state = -1_i32;
 
                     og.add_edge(
                         source_node,
@@ -1276,7 +1601,7 @@ pub fn work_on_component(
                     let intersecting_eqlist = intersect(&v_to_x_eq, &u_to_x_info.eqlist);
                     let curr_state = u_to_x_info.state;
 
-                    let mut sum = 0 as u32;
+                    let mut sum = 0_u32;
                     for i in intersecting_eqlist.iter() {
                         sum += eq_class_count[*i as usize];
                     }
@@ -1375,6 +1700,11 @@ pub fn parse_eq(filename: &std::path::Path) -> Result<EqClassExperiment, io::Err
 
     let mut tnames = Vec::<String>::with_capacity(num_target);
 
+    println!(
+        "Number of transcript {}, number of equivalence classes {}",
+        num_target, num_eq
+    );
+
     for _ in 0..num_target {
         buf.clear();
         buf_reader
@@ -1413,6 +1743,7 @@ pub fn parse_eq(filename: &std::path::Path) -> Result<EqClassExperiment, io::Err
     //let duration = start.elapsed();
     Ok(exp)
     // make graph from these
+<<<<<<< HEAD
 }
 
 // alevin part of the equivalence classes
@@ -1807,3 +2138,6 @@ pub fn bfh_to_graph(
 
     og
 }
+=======
+} 
+>>>>>>> 6b7281c497962db5f5f4cec3671a433094082817
